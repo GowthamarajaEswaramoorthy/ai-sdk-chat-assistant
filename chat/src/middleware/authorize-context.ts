@@ -20,7 +20,7 @@ export const genericAtuhCheck = (
   }
 
   let decoded: any;
-  const { customerId, cartId, isAdmin } = req.query;
+  const { customerId, cartId } = req.query;
   try {
     decoded = jwt.verify(token!, process.env.JWT_SECRET);
   } catch (error) {
@@ -37,12 +37,6 @@ export const genericAtuhCheck = (
   if (cartId) {
     const decoded = jwt.verify(token!, process.env.JWT_SECRET);
     if ((decoded as any).cartId !== cartId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-  }
-
-  if (isAdmin) {
-    if ((decoded as any).isAdmin !== isAdmin) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
   }

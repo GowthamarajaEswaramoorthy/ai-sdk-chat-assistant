@@ -44,10 +44,6 @@ deployAs:
         - key: SYSTEM_PROMPT
           description: System prompt
           required: false
-        - key: IS_ADMIN_ENABLED
-          description: Whether admin is enabled
-          default: "false"
-          required: false
       securedConfiguration:
         - key: CTP_CLIENT_SECRET
           description: commercetools Composable Commerce client secret

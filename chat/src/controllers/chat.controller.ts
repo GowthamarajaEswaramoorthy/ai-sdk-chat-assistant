@@ -1,9 +1,11 @@
-import { CommercetoolsAgentToolkit } from '@commercetools-demo/ct-agent-toolkit/ai-sdk';
-import { CoreMessage, pipeDataStreamToResponse, streamText } from 'ai';
+import { CommercetoolsAgentEssentials } from '@commercetools/agent-essentials/ai-sdk';
+import { CoreMessage, generateObject, NoSuchToolError, pipeDataStreamToResponse, streamText } from 'ai';
 import { Request, Response } from 'express';
+import { DEFAULT_SYSTEM_PROMPT } from '../contants';
 import { injectNavigationTools } from '../navigation-tools';
 import ModelProvider from '../services/modelProvider';
 import { logger } from '../utils/logger.utils';
+import { hydratePrompt } from '../utils/prompt';
 
 export function errorHandler(error: unknown) {
   if (error == null) {
@@ -53,21 +55,18 @@ export const createCommercetoolsAgentToolkit = (
   context: {
     customerId: string;
     cartId: string;
-    isAdmin?: string;
   }
 ) => {
-  return new CommercetoolsAgentToolkit({
+  return new CommercetoolsAgentEssentials({
     clientId,
     clientSecret,
     authUrl,
     projectKey,
     apiUrl,
-
     configuration: {
       context: {
         ...(context.customerId && { customerId: context.customerId }),
         ...(context.cartId && { cartId: context.cartId }),
-        ...(context.isAdmin && { isAdmin: context.isAdmin === 'true' }),
       },
       actions: availableActions,
     },
@@ -101,7 +100,10 @@ export const post = async (request: Request, response: Response) => {
       return response.status(400).json({ error: 'Messages are required' });
     }
 
-    const { customerId, cartId, isAdmin } = request.query;
+    const trimmedMessages = messages.slice(0, 1);
+
+    const { customerId, cartId, locale, currentPath } = request.query;
+    const context = { customerId: customerId as string, cartId: cartId as string };
     const availableActions = parseAvailableActions(
       process.env.AVAILABLE_TOOLS
     );
@@ -113,42 +115,58 @@ export const post = async (request: Request, response: Response) => {
       process.env.CTP_PROJECT_KEY,
       process.env.CTP_API_URL,
       availableActions,
-      { customerId: customerId as string, cartId: cartId as string, isAdmin: isAdmin as string }
+      context
     );
-
-    logger.info(`commercetoolsAgentToolkit initialized`);
-
-    if (isAdmin === 'true' && process.env.IS_ADMIN_ENABLED === 'true') {
-      logger.info(`authenticating as admin`);
-      await commercetoolsAgentToolkit.authenticateAdmin();
-    } else {
-      logger.info(`authenticating as customer`);
-      await commercetoolsAgentToolkit.authenticateCustomer();
-    }
-    logger.info(`commercetoolsAgentToolkit authenticated`);
 
     // Get the model instance from the ModelProvider
     const model = ModelProvider.getInstance().getModel();
 
     const tools = injectNavigationTools(commercetoolsAgentToolkit.getTools());
 
+    logger.info('tools', Object.keys(tools));
+
+    const systemPrompt = hydratePrompt(process.env.SYSTEM_PROMPT || DEFAULT_SYSTEM_PROMPT, {customerId, cartId, locale, currentPath});
+
+    const repairToolCall = async ({
+      toolCall,
+      tools,
+      parameterSchema,
+      error,
+    }: any ) => {
+      if (NoSuchToolError.isInstance(error)) {
+        return null; // do not attempt to fix invalid tool names
+      }
+  
+      const tool = tools[toolCall.toolName as keyof typeof tools];
+  
+      const { object: repairedArgs } = await generateObject({
+        model: model,
+        schema: tool.parameters,
+        prompt: [
+          `The model tried to call the tool "${toolCall.toolName}"` +
+            ` with the following arguments:`,
+          JSON.stringify(toolCall.args),
+          `The tool accepts the following schema:`,
+          JSON.stringify(parameterSchema(toolCall)),
+          'Please fix the arguments.',
+        ].join('\n'),
+      });
+
+      logger.info('repairedArgs', repairedArgs);
+  
+      return { ...toolCall, args: JSON.stringify(repairedArgs) };
+    }
+
+
     pipeDataStreamToResponse(response, {
       status: 200,
       statusText: 'OK',
       execute: async (dataStreamWriter) => {
         const result = streamText({
+          experimental_repairToolCall: repairToolCall,
           model: model,
-          system:
-            process.env.SYSTEM_PROMPT ||
-            `You are a helpful shopping assistant that can access Commercetools data. 
-              Your primary goal is to help the user shop for products.
-              When interacting with carts: 
-              - If the user wants to view or modify an *existing* cart, ask for the cart ID or key before using 'read_cart' or 'update_cart'. 
-              - If the user wants to  add items to a cart and hasn't mentioned an existing cart ID/key, use the 'create_cart' tool first. You don't need an ID to create a cart, if is not not in the request or history just create a new one.
-              When you use tools to retrieve information (like product listings), summarize the key information from the tool results in your response. 
-              If a tool call results in an error: Inform the user that the action failed, state the reason if known, and ask if they want to try something else or provide more details (e.g., 'I couldn't find a cart with that ID. Would you like to try a different ID or create a new cart?'). 
-              After receiving successful tool results, ALWAYS generate a final text message for the user based on those results.`,
-          messages,
+          system: systemPrompt,
+          messages: trimmedMessages,
           tools,
           maxSteps: parseInt(process.env.MAX_STEPS || '25'),
         });
