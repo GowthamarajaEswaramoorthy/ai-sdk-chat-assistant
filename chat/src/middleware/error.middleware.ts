@@ -1,5 +1,5 @@
-import { Request, Response, NextFunction } from 'express';
-import { logger } from '../utils/logger.utils';
+import { Request, Response, NextFunction } from "express";
+import { logger } from "../utils/logger.utils";
 
 /**
  * Global error handling middleware
@@ -13,27 +13,24 @@ export const errorMiddleware = (
 ): void => {
   logger.error(`Error: ${error.message}`, { stack: error.stack });
 
-  // Handle CORS errors
-  if (error.message === 'Not allowed by CORS') {
+  if (error.message === "Not allowed by CORS") {
     res.status(403).json({
-      status: 'error',
-      message: 'Origin not allowed by CORS policy',
+      status: "error",
+      message: "Origin not allowed by CORS policy",
     });
     return;
   }
 
-  // Handle 404 errors
-  if (error.message === 'Path not found.') {
+  if (error.message === "Path not found.") {
     res.status(404).json({
-      status: 'error',
-      message: 'Resource not found',
+      status: "error",
+      message: "Resource not found",
     });
     return;
   }
 
-  // Default error response
   res.status(500).json({
-    status: 'error',
-    message: 'Internal server error',
+    status: "error",
+    message: "Internal server error",
   });
 };

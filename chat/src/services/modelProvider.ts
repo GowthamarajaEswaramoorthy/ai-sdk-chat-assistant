@@ -26,14 +26,17 @@ class ModelProvider {
     }
 
     try {
-      this.model =
-        process.env.AI_PROVIDER === 'openai'
-          ? createOpenAI({
-              apiKey: process.env.OPENAI_API_KEY,
-            })(process.env.AI_MODEL)
-          : createAnthropic({
-              apiKey: process.env.ANTHROPIC_API_KEY,
-            })(process.env.AI_MODEL);
+      if (process.env.AI_PROVIDER === 'openai') {
+        this.model = createOpenAI({
+          apiKey: process.env.OPENAI_API_KEY,
+        })(process.env.AI_MODEL);
+      } else if (process.env.AI_PROVIDER === 'anthropic') {
+        this.model = createAnthropic({
+          apiKey: process.env.ANTHROPIC_API_KEY,
+        })(process.env.AI_MODEL);
+      } else {
+        throw new Error(`Unsupported AI provider: ${process.env.AI_PROVIDER}`);
+      }
 
       logger.info(
         `AI model initialized with provider: ${process.env.AI_PROVIDER}, model: ${process.env.AI_MODEL}`

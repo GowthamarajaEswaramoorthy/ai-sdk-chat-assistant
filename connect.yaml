@@ -25,6 +25,10 @@ deployAs:
           description: Comma separated list of allowed origins
           default: "localhost:3000,localhost:5173,commercetools.com,frontend.site"
           required: false
+        - key: PORT
+          description: Port number for the service
+          default: "8080"
+          required: false
         - key: AI_PROVIDER
           description: AI provider to use (anthropic, openai)
           default: "anthropic"
@@ -35,14 +39,15 @@ deployAs:
           required: true
         - key: AVAILABLE_TOOLS
           description: Available tools (json stringified array)
-          default: "{\"products\":{\"read\":true},\"category\":{\"read\":true},\"cart\":{\"read\":true},\"order\":{\"read\":true}}"
+          default: '{"products":{"read":true},"category":{"read":true},"cart":{"read":true},"order":{"read":true},"customer":{"read":true}}'
           required: true
         - key: MAX_STEPS
           description: Maximum number of steps for tool execution
           default: "25"
           required: false
         - key: SYSTEM_PROMPT
-          description: System prompt
+          description: System prompt for the customer service AI assistant
+          default: "You are a helpful customer service assistant for an e-commerce platform. Your primary goal is to assist customers with their inquiries about orders, products, and account information."
           required: false
       securedConfiguration:
         - key: CTP_CLIENT_SECRET
