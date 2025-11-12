@@ -13,7 +13,10 @@ This is an AI-powered customer service chatbot built with commercetools Connect 
 
 ### Customer Service Capabilities
 
-- **Customer Lookup**: Find customers by their first and last name
+- **Guest & Logged-In User Support**: Works for both authenticated and guest users
+  - Guest users: Bot asks for email to look up orders
+  - Logged-in users: Seamless experience with customer context
+- **Customer Lookup**: Find customers by their first and last name or email address
 - **Order History**: Retrieve complete order history for any customer
 - **Order Details**: View detailed information about orders including:
   - Order number and status
@@ -39,23 +42,45 @@ The assistant includes several AI tools for customer service operations:
 
 ### Example Queries
 
-The AI assistant can respond to natural language queries such as:
+The AI assistant can respond to natural language queries from both guest and logged-in users:
 
-- "Can you help me find orders for John Smith?"
-- "What orders does Jane Doe have?"
-- "Show me the order history for customer Sarah Johnson"
-- "Find all orders for Michael Brown and their current status"
+**Guest Users:**
+
+- "I want to track my order" → Bot asks for email
+- "My email is john@example.com" → Bot retrieves orders
+- "Check order status for jane@example.com" → Direct lookup
+
+**Logged-In Users:**
+
+- "Show me my recent orders" → Bot uses customer context
+- "What's my order status?" → Direct access to customer data
+- "Can you help me find orders for John Smith?" → Search by name or email
 
 ### API Endpoint
 
-The chatbot exposes a POST endpoint at `/chat` that accepts:
+The chatbot exposes a POST endpoint at `/chat` that accepts both guest and logged-in users:
+
+**Guest User Request:**
 
 ```json
 {
   "messages": [
     {
       "role": "user",
-      "content": "Find orders for John Smith"
+      "content": "I want to track my order"
+    }
+  ]
+}
+```
+
+**Logged-In User Request:**
+
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Show me my orders"
     }
   ]
 }
@@ -63,10 +88,12 @@ The chatbot exposes a POST endpoint at `/chat` that accepts:
 
 Optional query parameters:
 
-- `customerId`: Pre-identified customer ID for context
+- `customerId`: Customer ID for logged-in users (enables direct data access)
 - `cartId`: Active cart ID if applicable
 - `locale`: Preferred locale for responses
 - `currentPath`: Current page context in the application
+
+**Note**: For logged-in users, include `customerId` as a query parameter: `/chat?customerId=123`
 
 ## Architecture
 

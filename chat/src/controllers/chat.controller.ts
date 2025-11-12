@@ -7,7 +7,7 @@ import {
   streamText,
 } from "ai";
 import { Request, Response } from "express";
-import { DEFAULT_SYSTEM_PROMPT } from "../contants";
+import { DEFAULT_SYSTEM_PROMPT, GUEST_USER_PROMPT } from "../contants";
 import { injectNavigationTools } from "../navigation-tools";
 import { createCustomerServiceTools } from "../customer-service-tools";
 import ModelProvider from "../services/modelProvider";
@@ -106,6 +106,12 @@ export const post = async (request: Request, response: Response) => {
     const trimmedMessages = messages.slice(0, 1);
 
     const { customerId, cartId, locale, currentPath } = request.query;
+
+    const isGuestUser = !customerId || customerId === "";
+    const userType = isGuestUser ? "guest" : "authenticated";
+
+    logger.info(`Processing ${userType} user request`);
+
     const context = {
       customerId: customerId as string,
       cartId: cartId as string,
@@ -139,10 +145,15 @@ export const post = async (request: Request, response: Response) => {
 
     logger.info("tools", Object.keys(tools));
 
-    const systemPrompt = hydratePrompt(
+    let systemPrompt = hydratePrompt(
       process.env.SYSTEM_PROMPT || DEFAULT_SYSTEM_PROMPT,
       { customerId, cartId, locale, currentPath }
     );
+
+    if (isGuestUser) {
+      systemPrompt += GUEST_USER_PROMPT;
+      logger.info("Added guest user instructions to system prompt");
+    }
 
     const repairToolCall = async ({
       toolCall,
