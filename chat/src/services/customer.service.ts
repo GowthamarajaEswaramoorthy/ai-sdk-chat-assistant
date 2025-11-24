@@ -144,6 +144,120 @@ export class CustomerService {
   }
 
   /**
+   * Get order by ID
+   * @param orderId Order ID
+   * @returns Order details
+   */
+  async getOrderById(orderId: string): Promise<Order> {
+    try {
+      logger.info(`Fetching order by ID: ${orderId}`);
+
+      const response = await this.apiRoot
+        .orders()
+        .withId({ ID: orderId })
+        .get()
+        .execute();
+
+      logger.info(
+        `Found order: ${response.body.orderNumber || response.body.id}`
+      );
+
+      return response.body;
+    } catch (error) {
+      logger.error("Error fetching order by ID:", error);
+      throw new Error(
+        `Failed to fetch order: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    }
+  }
+
+  /**
+   * Get order by order number
+   * @param orderNumber Order number
+   * @returns Order details
+   */
+  async getOrderByOrderNumber(orderNumber: string): Promise<Order> {
+    try {
+      logger.info(`Fetching order by order number: ${orderNumber}`);
+
+      const response = await this.apiRoot
+        .orders()
+        .withOrderNumber({ orderNumber })
+        .get()
+        .execute();
+
+      logger.info(
+        `Found order: ${response.body.orderNumber || response.body.id}`
+      );
+
+      return response.body;
+    } catch (error) {
+      logger.error("Error fetching order by order number:", error);
+      throw new Error(
+        `Failed to fetch order: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    }
+  }
+
+  /**
+   * Add return info to an order
+   * @param orderId Order ID
+   * @param version Current version of the order
+   * @param returnItems Items to return
+   * @param returnTrackingId Optional tracking ID for the return
+   * @returns Updated order with return info
+   */
+  async addReturnToOrder(
+    orderId: string,
+    version: number,
+    returnItems: Array<{
+      lineItemId?: string;
+      customLineItemId?: string;
+      quantity: number;
+      comment?: string;
+      shipmentState: "Advised" | "Returned";
+    }>,
+    returnTrackingId?: string
+  ): Promise<Order> {
+    try {
+      logger.info(`Adding return info to order: ${orderId}`);
+
+      const response = await this.apiRoot
+        .orders()
+        .withId({ ID: orderId })
+        .post({
+          body: {
+            version,
+            actions: [
+              {
+                action: "addReturnInfo",
+                returnTrackingId,
+                returnDate: new Date().toISOString(),
+                items: returnItems.map((item) => ({
+                  quantity: item.quantity,
+                  lineItemId: item.lineItemId,
+                  customLineItemId: item.customLineItemId,
+                  comment: item.comment,
+                  shipmentState: item.shipmentState,
+                })),
+              },
+            ],
+          },
+        })
+        .execute();
+
+      logger.info(`Successfully added return info to order ${orderId}`);
+
+      return response.body;
+    } catch (error) {
+      logger.error("Error adding return to order:", error);
+      throw new Error(
+        `Failed to add return to order: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    }
+  }
+
+  /**
    * Find customer by email and return their orders
    * @param email Customer's email address
    * @returns Object containing customer and their orders
