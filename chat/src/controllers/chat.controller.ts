@@ -103,7 +103,7 @@ export const post = async (request: Request, response: Response) => {
       return response.status(400).json({ error: "Messages are required" });
     }
 
-    const trimmedMessages = messages.slice(0, 1);
+    const trimmedMessages = messages;
 
     const { customerId, cartId, locale, currentPath } = request.query;
 
@@ -135,7 +135,8 @@ export const post = async (request: Request, response: Response) => {
       process.env.CTP_CLIENT_SECRET,
       process.env.CTP_PROJECT_KEY,
       process.env.CTP_AUTH_URL,
-      process.env.CTP_API_URL
+      process.env.CTP_API_URL,
+      customerId as string
     );
 
     const tools = injectNavigationTools({

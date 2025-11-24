@@ -11,7 +11,8 @@ export const createCustomerServiceTools = (
   clientSecret: string,
   projectKey: string,
   authUrl: string,
-  apiUrl: string
+  apiUrl: string,
+  contextCustomerId?: string
 ) => {
   const customerService = new CustomerService(
     clientId,
@@ -181,9 +182,113 @@ export const createCustomerServiceTools = (
       },
     }),
 
+    getMostRecentOrder: tool({
+      description:
+        "IMMEDIATELY get the most recent order when the user asks 'Where is my order?', 'Check my order status', or similar questions. If the user has provided their email in the conversation (current or previous messages), use it directly. Do NOT ask for confirmation or additional information. Returns the latest order with full details including tracking, items, and shipping information. For authenticated users, customerId is taken from context automatically. For guest users, extract the email from the conversation.",
+      parameters: z.object({
+        customerId: z
+          .string()
+          .uuid()
+          .optional()
+          .describe(
+            "Optional: The unique UUID of the customer. If not provided, uses the authenticated user's customerId from context."
+          ),
+        email: z
+          .string()
+          .email()
+          .optional()
+          .describe(
+            "Optional: The email address to look up the customer. Use this when the user is not authenticated but has provided their email. Do not use if customerId is available."
+          ),
+      }),
+      execute: async ({ customerId, email }) => {
+        try {
+          let effectiveCustomerId = customerId || contextCustomerId;
+
+          if (!effectiveCustomerId && email) {
+            logger.info(
+              `Tool: getMostRecentOrder looking up customer by email ${email}`
+            );
+            const customers = await customerService.findCustomerByEmail(email);
+
+            if (customers.length === 0) {
+              return {
+                success: false,
+                message: `No customer found with email ${email}`,
+                order: null,
+              };
+            }
+
+            effectiveCustomerId = customers[0].id;
+            logger.info(
+              `Tool: Found customer ID ${effectiveCustomerId} for email ${email}`
+            );
+          }
+
+          if (!effectiveCustomerId) {
+            return {
+              success: false,
+              message: "Customer ID or email is required.",
+              order: null,
+            };
+          }
+
+          logger.info(
+            `Tool: getMostRecentOrder called for ${effectiveCustomerId}`
+          );
+          const orders =
+            await customerService.getCustomerOrders(effectiveCustomerId);
+
+          if (orders.length === 0) {
+            return {
+              success: false,
+              message: "No orders found for this customer",
+              order: null,
+            };
+          }
+
+          const mostRecentOrder = orders[0];
+
+          return {
+            success: true,
+            message: `Found most recent order`,
+            order: {
+              id: mostRecentOrder.id,
+              orderNumber: mostRecentOrder.orderNumber,
+              orderState: mostRecentOrder.orderState,
+              shipmentState: mostRecentOrder.shipmentState,
+              paymentState: mostRecentOrder.paymentState,
+              totalPrice: mostRecentOrder.totalPrice,
+              lineItems: mostRecentOrder.lineItems.map((item) => ({
+                id: item.id,
+                name: item.name,
+                quantity: item.quantity,
+                price: item.price,
+                totalPrice: item.totalPrice,
+                variant: item.variant,
+              })),
+              shippingAddress: mostRecentOrder.shippingAddress,
+              billingAddress: mostRecentOrder.billingAddress,
+              shippingInfo: mostRecentOrder.shippingInfo,
+              createdAt: mostRecentOrder.createdAt,
+              lastModifiedAt: mostRecentOrder.lastModifiedAt,
+              customerId: mostRecentOrder.customerId,
+            },
+          };
+        } catch (error) {
+          logger.error("Error in getMostRecentOrder tool:", error);
+          return {
+            success: false,
+            message: `Error fetching most recent order: ${error instanceof Error ? error.message : "Unknown error"}`,
+            order: null,
+          };
+        }
+      },
+    }),
+
     findCustomerWithOrdersByEmail: tool({
       description:
-        "Search for a customer by their email address and immediately retrieve all their orders. This is the PREFERRED tool when the user provides an email and asks about orders, order history, or purchases. It handles the customer ID lookup automatically and returns both customer info and all their orders in one call.",
+        "IMMEDIATELY search for a customer and retrieve ALL their orders when an email is provided. Use this tool RIGHT AWAY when the user provides an email address in the conversation, especially when they ask about 'order status', 'checking order', 'where is my order', or 'order history'. Do NOT ask for additional information if you already have the email. Returns both customer info and all their orders in one call.",
       parameters: z.object({
         email: z
           .string()
